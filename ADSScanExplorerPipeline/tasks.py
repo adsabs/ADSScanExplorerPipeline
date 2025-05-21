@@ -131,7 +131,7 @@ def task_upload_db_for_volume(journal_volume_id: str):
             vol = JournalVolume.get_from_id_or_name(journal_volume_id, session)
             url = config.get('SERVICE_DB_PUSH_URL' ,'')
             auth_token = config.get('SERVICE_AUTHENTICATION_TOKEN' ,'')
-            x = requests.put(url, json = vol.to_dict(), headers = {'Authorization': 'Bearer:' + auth_token} )
+            x = requests.put(url, json = vol.to_dict(), headers = {'Authorization': 'Bearer ' + auth_token} )
             if x.status_code == 200:
                 vol.db_uploaded = True
                 set_correct_volume_status(vol, session)

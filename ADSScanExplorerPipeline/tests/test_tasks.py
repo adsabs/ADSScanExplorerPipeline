@@ -168,7 +168,7 @@ class TestTasks(unittest.TestCase):
         url = config.get('SERVICE_DB_PUSH_URL' ,'')
         auth_token = config.get('SERVICE_AUTHENTICATION_TOKEN' ,'')
         mock_put.assert_called()    
-        mock_put.assert_called_with(url, json=expected_request_args, headers={'Authorization': 'Bearer:' + auth_token})
+        mock_put.assert_called_with(url, json=expected_request_args, headers={'Authorization': 'Bearer ' + auth_token})
 
         for vol in used_session.query(JournalVolume).filter(JournalVolume.journal == "").all():
             self.assertEqual(vol.type, "seri")
