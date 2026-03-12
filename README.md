@@ -55,24 +55,70 @@ docker exec -it ads_scan_explorer_pipeline python setup_db.py [--re-create]
 ```
 
 ## Usage
-The pipeline can be run in a couple of different setups.
 
-For a pure dry-run to see which volumes would be detected without writing anything to db run:
+### Subcommands
+
+| Command | What it does |
+|---------|-------------|
+| `NEW` | Scans input folder, discovers and processes all new or changed volumes |
+| `UPDATE` | Reprocesses all volumes already in the pipeline DB |
+| `SINGLE --id <id> [<id2> ...]` | Processes one or more specific volumes by ID (uuid or journal+volume e.g. `ApJ..0333`) |
+
+### Flags (all default to True)
+
+| Flag | What it controls |
+|------|-----------------|
+| `--process-db=True/False` | Parse metadata files and populate pipeline DB |
+| `--upload-db=True/False` | Push volume metadata to the service API |
+| `--upload-files=True/False` | Upload TIFF images to S3 |
+| `--index-ocr=True/False` | Index OCR text into OpenSearch |
+| `--force-update=True/False` | Rerun steps even if already marked complete |
+
+NEW-only flags:
+
+| Flag | What it controls |
+|------|-----------------|
+| `--process=True/False` | Whether detected volumes should be processed (default True) |
+| `--dry-run=True/False` | Detect volumes without writing anything to DB (default False) |
+
+### Examples
+
+Dry-run to see which volumes would be detected:
 ```
-docker exec -it ads_scan_explorer_pipeline python run.py --input-folder=/opt/ADS_scans_sample/ NEW --dry-run=True
+docker exec ads_scan_explorer_pipeline python run.py --input-folder=/proj/ads/articles NEW --dry-run=True
 ```
 
-Just check which volumes in the input folder that are new or have updated files. The volumes will be added to the db unde the table "journal_volume"
+Discover new volumes without processing them:
 ```
-docker exec -it ads_scan_explorer_pipeline python run.py --input-folder=/opt/ADS_scans_sample/ NEW --process=False
-```
-
-Process all volumes with new or update status, updating the db and ocr index but leaving the heavier task of uploading all image files to the S3 Bucket
-```
-docker exec -it ads_scan_explorer_pipeline python run.py --input-folder=/opt/ADS_scans_sample/ --upload-files=n --index-ocr=y --upload-db=y NEW --process=True
+docker exec ads_scan_explorer_pipeline python run.py --input-folder=/proj/ads/articles NEW --process=False
 ```
 
-Process a single or multiple volumes by id. Will be processed/reprocessed disregarding previous status. Id is either volume id (uuid) or journal + volume. Multiple ids can be input comma separated
+Full run (all steps — process DB, push to service, upload images, index OCR):
 ```
-docker exec -it ads_scan_explorer_pipeline python run.py --input-folder=/opt/ADS_scans_sample/ --upload-files=y --index-ocr=y SINGLE --id=lls..1969,c949f56b-cef6-43ea-b34c-cf5cc1bcdd41
+docker exec ads_scan_explorer_pipeline python run.py --input-folder=/proj/ads/articles NEW
+```
+
+Process DB and push to service, skip S3 upload and OCR indexing:
+```
+docker exec ads_scan_explorer_pipeline python run.py --input-folder=/proj/ads/articles --upload-files=False --index-ocr=False NEW
+```
+
+Re-run pipeline DB only (safe — does not touch service DB, S3, or OpenSearch):
+```
+docker exec ads_scan_explorer_pipeline python run.py --input-folder=/proj/ads/articles --upload-db=False --upload-files=False --index-ocr=False --force-update=True UPDATE
+```
+
+Push pipeline DB to service DB only (no file re-processing):
+```
+docker exec ads_scan_explorer_pipeline python run.py --input-folder=/proj/ads/articles --process-db=False --upload-db=True --upload-files=False --index-ocr=False --force-update=True UPDATE
+```
+
+Re-index OCR into OpenSearch (deletes and re-inserts per volume):
+```
+docker exec ads_scan_explorer_pipeline python run.py --input-folder=/proj/ads/articles --process-db=False --upload-db=False --upload-files=False --index-ocr=True --force-update=True UPDATE
+```
+
+Process specific volumes by ID (space-separated):
+```
+docker exec ads_scan_explorer_pipeline python run.py --input-folder=/proj/ads/articles SINGLE --id ApJ..0333 lls..1969
 ```
