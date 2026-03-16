@@ -59,7 +59,7 @@ def task_process_volume(base_path: str, journal_volume_id: str, process_db: bool
                 task_upload_image_files_for_volume(base_path, journal_volume_id)
 
             vol = JournalVolume.get_from_id_or_name(journal_volume_id, session)
-            set_correct_volume_status(vol, session)
+            set_correct_volume_status(vol, session, process_db=process_db, upload_db=upload_db, upload_files=upload_files, index_ocr=index_ocr)
 
         except Exception as e:
             session.rollback()

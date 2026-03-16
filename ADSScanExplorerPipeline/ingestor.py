@@ -54,7 +54,7 @@ def check_page_name_is_valid(page_name: str):
         try:
             PageType.page_type_from_separator(page_name[7])
             return True
-        except:
+        except Exception:
             return False
     return False
 
@@ -104,7 +104,7 @@ def parse_dat_file(file_path: str, journal_volume: JournalVolume, session: Sessi
         line_num = 0
         for line in file:
             line_num += 1
-            line_split = re.split(r"[\s+|]", line.strip())
+            line_split = re.split(r"[\s|]+", line.strip())
             article_name = line_split[0]
             article = Article.get_or_create(article_name, journal_volume.id, session)
             article.pages = []
@@ -129,7 +129,7 @@ def check_all_image_files_exists(image_path: str, journal_volume: JournalVolume,
     image_list = os.listdir(image_path)
     for page in Page.get_all_from_volume(journal_volume.id, session):
         if page.name not in image_list:
-            raise MissingImageFileException("Missing image file %s", page.name)
+            raise MissingImageFileException(f"Missing image file {page.name}")
 
 
 def parse_image_files(image_path: str, journal_volume: JournalVolume, session: Session):
@@ -290,8 +290,9 @@ def hash_volume(base_path: str, vol: JournalVolume) -> str:
     """
     vol_hash = ""
     list_path = os.path.join(base_path, config.get('TOP_SUB_DIR', '') ,vol.type, vol.journal)
+    vol_prefix = vol.journal + vol.volume + "."
     for file in sorted(os.listdir(list_path)):
-        if str(vol.volume) in file:
+        if file.startswith(vol_prefix):
             file_path = os.path.join(list_path, file)
             modified_time = os.path.getmtime(file_path)
             vol_hash = md5((vol_hash + str(modified_time) + file).encode("utf-8")).hexdigest()
@@ -323,10 +324,19 @@ def set_ingestion_error_status(session: Session, journal_volume_id: str, error_m
     except Exception as e:
         logger.error("Failed setting error on volume: %s due to: %s", str(journal_volume_id), e)
 
-def set_correct_volume_status(vol: JournalVolume, session: Session):
+def set_correct_volume_status(vol: JournalVolume, session: Session, process_db: bool = True, upload_db: bool = True, upload_files: bool = True, index_ocr: bool = True):
     if vol.status != VolumeStatus.Error:
         vol.status_message = ""
-        if vol.bucket_uploaded and vol.db_done and vol.db_uploaded and vol.ocr_uploaded:
+        done = True
+        if process_db and not vol.db_done:
+            done = False
+        if upload_db and not vol.db_uploaded:
+            done = False
+        if upload_files and not vol.bucket_uploaded:
+            done = False
+        if index_ocr and not vol.ocr_uploaded:
+            done = False
+        if done:
             vol.status = VolumeStatus.Done
         session.add(vol)
         session.commit()

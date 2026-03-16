@@ -71,8 +71,6 @@ class TestTasks(unittest.TestCase):
             }
             self.assertEqual(vol.to_dict(), expected_dict)
 
-
-        #Mocked session doesn't update the row but adds a new row when adding to the db therefore we get 3 identical rows
         self.assertEqual(len(used_session.query(Page).filter().all()), 3)
         for page in used_session.query(Page).filter(JournalVolume.journal == "").all():
             self.assertEqual(page.name, expected_page.name)
@@ -88,6 +86,22 @@ class TestTasks(unittest.TestCase):
         for article in used_session.query(Article).filter(JournalVolume.journal == "").all():
             self.assertEqual(article.bibcode, expected_article.bibcode)
             self.assertEqual(article.journal_volume_id, vol.id)
+
+    @patch('ADSScanExplorerPipeline.app.ADSScanExplorerPipeline.session_scope')
+    @patch('ADSScanExplorerPipeline.models.JournalVolume.get_from_id_or_name')
+    def test_task_process_volume_skipped_steps_still_done(self, get_from_id_or_name, session_scope):
+        vol = JournalVolume("seri", "test.", "0001")
+        vol.bucket_uploaded = False
+        vol.db_uploaded = False
+        vol.ocr_uploaded = False
+        get_from_id_or_name.return_value = vol
+
+        session = UnifiedAlchemyMagicMock()
+        session_scope.return_value = session
+
+        task_process_volume(self.data_folder, vol.id, upload_files=False, index_ocr=False, upload_db=False)
+        self.assertTrue(vol.db_done)
+        self.assertEqual(vol.status, VolumeStatus.Done)
 
     @mock_s3
     @patch('ADSScanExplorerPipeline.app.ADSScanExplorerPipeline.session_scope')
@@ -174,4 +188,4 @@ class TestTasks(unittest.TestCase):
             self.assertEqual(vol.type, "seri")
             self.assertEqual(vol.journal, "test.")
             self.assertEqual(vol.volume, "0001")
-            self.assertEqual(vol.status, VolumeStatus.Processing)
+            self.assertEqual(vol.status, VolumeStatus.Done)
