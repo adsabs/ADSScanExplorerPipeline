@@ -95,10 +95,10 @@ class JournalVolume(Base, Timestamp):
         vol = session.query(cls).filter(cls.id == id).one_or_none()
         if vol:
             return vol
-        vol = session.query(cls).filter(cls.journal == id[0:5], cls.volume == id[5:9]).one()
+        vol = session.query(cls).filter(cls.journal == id[0:5], cls.volume == id[5:9]).one_or_none()
         if vol:
             return vol
-        raise ValueError
+        raise ValueError(f"Journal volume not found: {id}")
         
 
     @classmethod

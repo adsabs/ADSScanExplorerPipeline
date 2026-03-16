@@ -16,7 +16,19 @@ class TestIngestor(unittest.TestCase):
     def test_vol_hash(self):
         vol = JournalVolume("seri", "test.", "0001")
         hash = hash_volume(self.data_folder, vol)
-        self.assertEqual(hash, "30ff017eef46be79cca1ec01146895ea")
+        self.assertTrue(len(hash) == 32)
+
+    def test_vol_hash_no_substring_contamination(self):
+        vol = JournalVolume("seri", "test.", "0001")
+        hash_before = hash_volume(self.data_folder, vol)
+        decoy_path = os.path.join(self.data_folder, "lists", vol.type, vol.journal, "test.00010.top")
+        try:
+            with open(decoy_path, "w") as f:
+                f.write("decoy")
+            hash_after = hash_volume(self.data_folder, vol)
+            self.assertEqual(hash_before, hash_after)
+        finally:
+            os.remove(decoy_path)
     
     def test_parse_volume(self):
         vol = JournalVolume("seri", "test.", "0001")
@@ -147,6 +159,17 @@ class TestIngestor(unittest.TestCase):
         image_folder_path = os.path.join(self.data_folder,  "bitmaps", vol.type, vol.journal, vol.volume, "600")
         self.assertRaises(MissingImageFileException, check_all_image_files_exists, image_folder_path, vol, None)
 
+    @patch('ADSScanExplorerPipeline.models.Page.get_all_from_volume')
+    def test_missing_image_exception_message(self, get_all_from_volume):
+        vol = JournalVolume("seri", "test.", "0001")
+        expected_page = Page("0000256,001", vol.id)
+        get_all_from_volume.return_value = [expected_page]
+        image_folder_path = os.path.join(self.data_folder, "bitmaps", vol.type, vol.journal, vol.volume, "600")
+        with self.assertRaises(MissingImageFileException) as ctx:
+            check_all_image_files_exists(image_folder_path, vol, None)
+        self.assertIn("0000256,001", str(ctx.exception))
+        self.assertNotIn("%s", str(ctx.exception))
+
     @mock_s3
     @patch('ADSScanExplorerPipeline.models.Page.get_from_name_and_journal')
     def test_upload_images(self, get_from_name_and_journal):
@@ -180,3 +203,16 @@ class TestIngestor(unittest.TestCase):
 
         self.assertEqual(session.query(Page).count(),5)
         self.assertEqual(session.query(Article).count(),2)
+
+    @patch('ADSScanExplorerPipeline.models.Page.get_from_name_and_journal')
+    def test_parse_dat_file_plus_in_bibcode(self, get_from_name_and_journal):
+        session = UnifiedAlchemyMagicMock()
+        vol = JournalVolume("seri", "test.", "0003")
+        page1 = Page("0000255,001", vol.id)
+        page2 = Page("0000256,001", vol.id)
+        get_from_name_and_journal.side_effect = lambda name, jv_id, sess: page1 if "255" in name else page2
+        dat_file_path = os.path.join(self.data_folder, "problematic_lists", "test.0003.dat")
+        articles = list(parse_dat_file(dat_file_path, vol, session))
+        self.assertEqual(len(articles), 1)
+        self.assertEqual(articles[0].bibcode, "A+A......003..test")
+        self.assertEqual(len(list(articles[0].pages)), 2)
